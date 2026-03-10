@@ -2,40 +2,37 @@ import streamlit as st
 import pandas as pd
 import io
 
-def processar_relatorio_detetive(file_garimpeiro, file_sped):
+def processar_auditoria_detetive(file_garimpeiro, file_sped):
     try:
-        # 1. Leitura das abas conforme sua estrutura
+        # 1. Leitura das abas específicas conforme sua regra
         df_garimpeiro = pd.read_excel(file_garimpeiro, sheet_name="Geral_Filtrado", dtype=str)
         df_sped = pd.read_excel(file_sped, sheet_name="C100 - DOCUMENTOS", dtype=str)
         
-        # Limpeza rigorosa das chaves para não dar erro de espaço
+        # Limpeza de chaves
         df_garimpeiro['Chave'] = df_garimpeiro['Chave'].astype(str).str.strip()
         chaves_sped_set = set(df_sped['CHV_NFE'].dropna().astype(str).str.strip())
         chaves_garimpeiro_set = set(df_garimpeiro['Chave'].dropna().astype(str).str.strip())
 
-        # 2. Criando a coluna de indicação (Ladainha resolvida: coluna criada no Garimpeiro)
+        # 2. Criando a coluna de indicação no Garimpeiro
         df_garimpeiro['CONSTA_NO_SPED'] = df_garimpeiro['Chave'].apply(
             lambda x: "SIM" if x in chaves_sped_set else "NÃO - NOTA FALTANDO NO SPED"
         )
 
-        # 3. Pegando dados das notas que SÓ estão no SPED
+        # 3. Identificando notas que só existem no SPED
         df_so_no_sped = df_sped[~df_sped['CHV_NFE'].astype(str).str.strip().isin(chaves_garimpeiro_set)].copy()
         
-        # Ajustando colunas para o anexo final
         if not df_so_no_sped.empty:
             df_so_no_sped = df_so_no_sped.rename(columns={'CHV_NFE': 'Chave'})
-            df_so_no_sped['CONSTA_NO_SPED'] = "ERRO - NOTA EXCEDENTE (NÃO ESTÁ NO GARIMPEIRO)"
+            df_so_no_sped['CONSTA_NO_SPED'] = "ERRO - NOTA EXCEDENTE (SÓ NO SPED)"
 
-        # 4. Unificando as bases (Garimpeiro em cima, sobras do SPED embaixo)
+        # 4. Unificação (Garimpeiro com coluna nova + Excedentes do SPED no final)
         df_final = pd.concat([df_garimpeiro, df_so_no_sped], ignore_index=True, sort=False)
 
-        # 5. Gerando o Excel
+        # 5. Geração do Excel
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df_final.to_excel(writer, index=False, sheet_name='Detetive_Fiscal')
-            
-            # Ajuste de layout para as colunas não ficarem espremidas
-            worksheet = writer.sheets['Detetive_Fiscal']
+            df_final.to_excel(writer, index=False, sheet_name='Auditoria_Detetive')
+            worksheet = writer.sheets['Auditoria_Detetive']
             for i, col in enumerate(df_final.columns):
                 worksheet.set_column(i, i, 30)
             
@@ -44,36 +41,27 @@ def processar_relatorio_detetive(file_garimpeiro, file_sped):
     except Exception as e:
         return None, f"Erro: {str(e)}"
 
-# --- INTERFACE NO CHROME ---
+# --- INTERFACE VISUAL NO CHROME ---
 st.set_page_config(page_title="Projeto Detetive", layout="wide")
-st.title("🕵️ Projeto Detetive: Auditoria de Chaves")
-st.markdown("---")
+st.title("🕵️ Projeto Detetive")
 
-# RESTAURADO: Os dois botões de upload que você amou
+# Garantindo os DOIS campos de upload na tela
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("1. Base Matriz")
-    arquivo_g = st.file_uploader("Upload do Relatório Garimpeiro", type=['xlsx'], key="up_garimpeiro")
+    st.subheader("Arquivo 1")
+    arquivo_garimpeiro = st.file_uploader("Relatório Garimpeiro", type=['xlsx'], key="g_up")
 
 with col2:
-    st.subheader("2. Base de Confronto")
-    arquivo_s = st.file_uploader("Upload do Arquivo SPED", type=['xlsx'], key="up_sped")
+    st.subheader("Arquivo 2")
+    arquivo_sped = st.file_uploader("Relatório SPED", type=['xlsx'], key="s_up")
 
-# Só executa se os dois arquivos forem enviados
-if arquivo_g and arquivo_s:
-    st.markdown("---")
-    if st.button("🚀 GERAR RELATÓRIO DE AUDITORIA", type="primary"):
-        with st.spinner("O Detetive está analisando as chaves..."):
-            resultado, mensagem = processar_relatorio_detetive(arquivo_g, arquivo_s)
-            
-            if resultado:
-                st.success("Auditoria concluída! O relatório unificado está pronto.")
-                st.download_button(
-                    label="📥 Baixar Planilha de Divergências",
-                    data=resultado,
-                    file_name="Auditoria_Detetive_Final.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-            else:
-                st.error(mensagem)
+# Apenas se ambos estiverem presentes, o botão aparece
+if arquivo_garimpeiro and arquivo_sped:
+    if st.button("EXECUTAR CRUZAMENTO", type="primary"):
+        res, msg = processar_auditoria_detetive(arquivo_garimpeiro, arquivo_sped)
+        if res:
+            st.success("Relatório gerado!")
+            st.download_button("Baixar Auditoria Unificada", data=res, file_name="Detetive_Fiscal_Final.xlsx")
+        else:
+            st.error(msg)
