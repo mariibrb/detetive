@@ -810,6 +810,17 @@ def _css_rosa():
     )
 
 
+def _init_session_downloads() -> None:
+    """Chaves para o Excel gerado sobreviverem ao rerun do Streamlit (o download não some)."""
+    for k in (
+        "dl_nascel_xlsx",
+        "dl_cliente_xlsx",
+        "dl_cmp_xlsx",
+    ):
+        if k not in st.session_state:
+            st.session_state[k] = None
+
+
 def main():
     st.set_page_config(
         page_title="Detetive Fiscal",
@@ -817,6 +828,7 @@ def main():
         layout="wide",
     )
     _css_rosa()
+    _init_session_downloads()
 
     st.title("🕵️ Detetive Fiscal")
 
@@ -861,8 +873,7 @@ def main():
         data, nome, err = _bytes_input(fn, p_fn)
         if err:
             st.error(err)
-            return
-        if not data:
+        elif not data:
             st.error(f"Anexe o ficheiro {detetive_core.ROTULO_NASCEL}.")
         else:
             bio, msg = detetive_core.gerar_excel_cfop_um_sped_completo(
@@ -871,22 +882,17 @@ def main():
                 rotulo_lado=detetive_core.ROTULO_NASCEL,
             )
             if bio:
-                st.download_button(
-                    label="⬇️ Descarregar Detetive_CFOP_Resultado_Nascel.xlsx",
-                    data=bio.getvalue(),
-                    file_name="Detetive_CFOP_Resultado_Nascel.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
+                st.session_state["dl_nascel_xlsx"] = bio.getvalue()
+                st.success("Excel Nascel gerado — use **Descarregar** em baixo (o botão mantém-se após mudar filtros).")
             else:
+                st.session_state["dl_nascel_xlsx"] = None
                 st.error(msg)
 
     if go_c:
         data, nome, err = _bytes_input(fc, p_fc)
         if err:
             st.error(err)
-            return
-        if not data:
+        elif not data:
             st.error(f"Anexe o ficheiro {detetive_core.ROTULO_CLIENTE}.")
         else:
             bio, msg = detetive_core.gerar_excel_cfop_um_sped_completo(
@@ -895,14 +901,10 @@ def main():
                 rotulo_lado=detetive_core.ROTULO_CLIENTE,
             )
             if bio:
-                st.download_button(
-                    label="⬇️ Descarregar Detetive_CFOP_Resultado_Cliente.xlsx",
-                    data=bio.getvalue(),
-                    file_name="Detetive_CFOP_Resultado_Cliente.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
+                st.session_state["dl_cliente_xlsx"] = bio.getvalue()
+                st.success("Excel Cliente gerado — use **Descarregar** em baixo.")
             else:
+                st.session_state["dl_cliente_xlsx"] = None
                 st.error(msg)
 
     if go_cmp:
@@ -910,8 +912,7 @@ def main():
         nc = _bytes_input(fn, p_fn)
         if dc[2] or nc[2]:
             st.error(dc[2] or nc[2])
-            return
-        if not dc[0] or not nc[0]:
+        elif not dc[0] or not nc[0]:
             st.error("Para o comparativo, envie **os dois** SPED (Cliente e Nascel).")
         else:
             bio, msg = detetive_core.gerar_excel_cfop_comparativo_nfe_e_cte_dois_speds(
@@ -921,15 +922,45 @@ def main():
                 nc[1],
             )
             if bio:
-                st.download_button(
-                    label="⬇️ Descarregar Detetive_sped.xlsx",
-                    data=bio.getvalue(),
-                    file_name="Detetive_sped.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
-                )
+                st.session_state["dl_cmp_xlsx"] = bio.getvalue()
+                st.success("Comparativo gerado — use **Descarregar** em baixo.")
             else:
+                st.session_state["dl_cmp_xlsx"] = None
                 st.error(msg)
+
+    st.divider()
+    st.markdown("### Descarregar")
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        if st.session_state.get("dl_nascel_xlsx"):
+            st.download_button(
+                label="⬇️ Detetive_CFOP_Resultado_Nascel.xlsx",
+                data=st.session_state["dl_nascel_xlsx"],
+                file_name="Detetive_CFOP_Resultado_Nascel.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="persist_dl_nascel",
+            )
+    with d2:
+        if st.session_state.get("dl_cliente_xlsx"):
+            st.download_button(
+                label="⬇️ Detetive_CFOP_Resultado_Cliente.xlsx",
+                data=st.session_state["dl_cliente_xlsx"],
+                file_name="Detetive_CFOP_Resultado_Cliente.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="persist_dl_cliente",
+            )
+    with d3:
+        if st.session_state.get("dl_cmp_xlsx"):
+            st.download_button(
+                label="⬇️ Detetive_sped.xlsx",
+                data=st.session_state["dl_cmp_xlsx"],
+                file_name="Detetive_sped.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="persist_dl_cmp",
+            )
 
 
 if __name__ == "__main__":
